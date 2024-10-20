@@ -8,6 +8,7 @@ interface NFTCardProps {
   tokenId: string;
   price: string;
   buttonText?: string; // 可选的按钮文本 props
+  onButtonClick?: (action: { type: string; tokenId: string }) => void; // 传入处理点击的函数
 }
 
 export default function NFTCard({
@@ -16,6 +17,7 @@ export default function NFTCard({
   price,
   tokenId,
   buttonText = "Buy Now", // 设置默认按钮文本为 "Buy Now"
+  onButtonClick, // 新增的 props
 }: NFTCardProps) {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -44,15 +46,20 @@ export default function NFTCard({
                 {name}
               </a>
             </h3>
-            <p className="mt-1 text-sm text-gray-500">{tokenId}</p>
+            <p className="mt-1 text-sm text-gray-500"># {tokenId}</p>
           </div>
-          <p className="text-sm font-medium text-gray-900">{price}</p>
+          <p className="text-sm font-medium text-gray-900">{price} ETH</p>
         </div>
 
         {/* 悬停时显示按钮 */}
         {isHovered && (
           <div className="absolute inset-0 flex justify-center items-center bg-black bg-opacity-50">
-            <button className="bg-blue-500 text-white px-6 py-2 rounded-full">
+            <button
+              className="bg-blue-500 text-white px-6 py-2 rounded-full"
+              onClick={() =>
+                onButtonClick && onButtonClick({ type: "list", tokenId })
+              } // 调用处理函数
+            >
               {buttonText}
             </button>
           </div>

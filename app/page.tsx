@@ -1,7 +1,102 @@
+"use client";
+import { useEffect, useState } from "react";
+import { ethers } from "ethers";
+import { useAccount } from "wagmi"; // 获取当前账户信息
 import Navbar from "./components/Navbar";
 import NFTCard from "./components/NFTCard";
+import getNFTPriceFromEvents from "./utils/getNFTPriceFromEvents";
+
+const contractAddress = "0x921b3467bC56802adD5347ff5277bE5E813eDfF7";
+import { abi } from "./contracts/NFTMarket.json"; // 你的合约ABI文件
 
 export default function Home() {
+  const [nfts, setNfts] = useState<any[]>([]);
+  const { address, isConnected, chainId } = useAccount(); // 获取当前连接的地址
+  const [provider, setProvider] =
+    useState<ethers.providers.Web3Provider | null>(null);
+
+  // 初始化 Web3Provider
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.ethereum) {
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
+      console.log("web3Provider", web3Provider);
+      setProvider(web3Provider);
+    }
+  }, []);
+
+  // 添加钱包授权逻辑
+  useEffect(() => {
+    const connectWallet = async () => {
+      if (provider) {
+        try {
+          await provider.send("eth_requestAccounts", []); // 请求用户授权连接钱包
+          console.log("Wallet connected");
+        } catch (error) {
+          console.error("Wallet connection failed:", error);
+        }
+      }
+    };
+    connectWallet();
+  }, [provider]); // 当 provider 初始化时执行钱包授权逻辑
+
+  // 检查连接状态并获取 NFT
+  useEffect(() => {
+    if (isConnected && chainId !== 11155111) {
+      alert("请切换到 Sepolia 网络");
+    } else if (isConnected && address) {
+      fetchNFTs();
+    }
+  }, [address, isConnected, chainId, location.pathname]);
+
+  // 获取合约地址上的NFT
+  const fetchNFTs = async () => {
+    try {
+      if (!provider || !address) return;
+
+      const contract = new ethers.Contract(contractAddress, abi, provider);
+      console.log("contract", contract);
+
+      const [receivedEvents] = await Promise.all([
+        contract.queryFilter(contract.filters.Transfer(null, contractAddress)), // 所有上架的NFT都会放在合约地址上
+      ]);
+      console.log("receivedEvents", receivedEvents);
+
+      const ownedTokenIds = new Set(
+        receivedEvents.map((event) => event.args!.tokenId.toString())
+      );
+
+      console.log("Owned Token IDs:", ownedTokenIds);
+
+      const fetchedNFTs = await Promise.all(
+        Array.from(ownedTokenIds).map(async (tokenId) => {
+          try {
+            const tokenURI = await contract.tokenURI(tokenId);
+            console.log(`Token ${tokenId} URI:`, tokenURI);
+            const price = await getNFTPriceFromEvents(contract, tokenId);
+            const metadataResponse = await fetch(tokenURI);
+            if (!metadataResponse.ok) throw new Error("元数据请求失败");
+
+            const metadata = await metadataResponse.json();
+            return {
+              id: tokenId,
+              imageUri: metadata.image,
+              name: metadata.name,
+              tokenId: tokenId,
+              price: price,
+            };
+          } catch (error) {
+            console.error(`获取 Token ID ${tokenId} 的元数据失败:`, error);
+            return null;
+          }
+        })
+      );
+
+      setNfts(fetchedNFTs.filter((nft) => nft !== null));
+    } catch (error) {
+      console.error("Error fetching NFTs:", error);
+    }
+  };
+
   return (
     <>
       <Navbar />
@@ -27,49 +122,3 @@ export default function Home() {
     </>
   );
 }
-
-const nfts = [
-  {
-    id: 1,
-    imageUri: "https://raw.seadn.io/files/4cf53eee9ce7e88421c9fd776808eb9b.png",
-    name: "Pudgy Penguin",
-    tokenId: "#3567",
-    price: "10.25 ETH",
-  },
-  {
-    id: 2,
-    imageUri: "https://raw.seadn.io/files/ef7854a409000b23f26f5edf8e19f369.png",
-    name: "Pudgy Penguin",
-    tokenId: "#2679",
-    price: "10.85 ETH",
-  },
-  {
-    id: 3,
-    imageUri: "https://raw.seadn.io/files/aa59ddbf79b07fcc1eafb5fb85b94463.png",
-    name: "Pudgy Penguin",
-    tokenId: "#7348",
-    price: "11.85 ETH",
-  },
-  {
-    id: 4,
-    imageUri: "https://raw.seadn.io/files/60415f03576456f7be92453f5e5f4a93.png",
-    name: "Pudgy Penguin",
-    tokenId: "#5254",
-    price: "12.55 ETH",
-  },
-  {
-    id: 5,
-    imageUri: "https://raw.seadn.io/files/aa59ddbf79b07fcc1eafb5fb85b94463.png",
-    name: "Pudgy Penguin",
-    tokenId: "#7348",
-    price: "11.85 ETH",
-  },
-  {
-    id: 6,
-    imageUri: "https://raw.seadn.io/files/60415f03576456f7be92453f5e5f4a93.png",
-    name: "Pudgy Penguin",
-    tokenId: "#5254",
-    price: "12.55 ETH",
-  },
-  // 添加更多 NFT 数据...
-];
